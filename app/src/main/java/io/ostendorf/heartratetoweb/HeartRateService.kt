@@ -29,6 +29,7 @@ class HeartRateService : Service(), SensorEventListener {
     private lateinit var mSensorManager: SensorManager
     private lateinit var httpQueue: RequestQueue
     private lateinit var preferences: SharedPreferences
+    private var previousTimestamp: Long = 0
 
     private val CHANNEL_ID = "HeartRateService"
 
@@ -93,7 +94,7 @@ class HeartRateService : Service(), SensorEventListener {
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         mHeartRateSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
         //hrv sensor
-        hrvSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE_VARIABLITY)
+//        hrvSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_BEAT)
 
         startMeasure()
 
@@ -108,13 +109,13 @@ class HeartRateService : Service(), SensorEventListener {
         Log.d("Sensor Status:", " Sensor registered: " + (if (sensorRegistered) "yes" else "no"))
 
         // hrv sensor
-        val sensorRegistered_2: Boolean = mSensorManager.registerListener(
-            this,
-            hrvSensor,
-            SensorManager.SENSOR_DELAY_FASTEST
-        )
-        Log.d("Sensor Status:", " Sensor registered: " + (if 
-        (sensorRegistered_2) "yes" else "no"))
+//        val sensorRegistered2: Boolean = mSensorManager.registerListener(
+//            this,
+//            hrvSensor,
+//            SensorManager.SENSOR_DELAY_FASTEST
+//        )
+//        Log.d("Sensor Status:", " Sensor registered: " + (if
+//        (sensorRegistered2) "yes" else "no"))
 
 
         sendStatusToActivity(MainActivity.Config.CONF_SENDING_STATUS_STARTING)
@@ -125,15 +126,16 @@ class HeartRateService : Service(), SensorEventListener {
         sendStatusToActivity(MainActivity.Config.CONF_SENDING_STATUS_NOT_RUNNING)
     }
 
-    // override fun onSensorChanged(event: SensorEvent?) {
-    //     val mHeartRateFloat: Float = event!!.values[0]
+     override fun onSensorChanged(event: SensorEvent?) {
+         val mHeartRateFloat: Float = event!!.values[0]
 
-    //     val mHeartRate: Int = mHeartRateFloat.roundToInt()
-    //     Log.d("HR: ", mHeartRate.toString())
+         val mHeartRate: Int = mHeartRateFloat.roundToInt()
+         val mHRV: Long = calculateRRInterval(event.timestamp)
+         Log.d("HR: ", mHeartRate.toString())
 
-    //     sendHeartRate(mHeartRate)
-    //     sendHeartRateToActivity(mHeartRate)
-    // }
+         sendHeartRate(mHeartRate,mHRV)
+         sendHeartRateToActivity(mHeartRate)
+     }
 
     // override fun onSensorChanged(event: SensorEvent?) {
     //     when (event?.sensor?.type) {
@@ -157,28 +159,28 @@ class HeartRateService : Service(), SensorEventListener {
     //     }
     // }
 
-    override fun onSensorChanged(event: SensorEvent?){
-        val sensorType = event?.sensor?.type
-
-        when(sensorType) {
-            Sensor.TYPE_HEART_RATE, Sensor.TYPE_HEART_RATE_VARIABLITY -> {
-                val values = event?.values
-                val mHeartRate: Int = event!!.values[0].roundToInt()
-                val mHRV: Int = event!!.values[1].roundToInt()
-                Log.d("HR: ", mHeartRate.toString())
-                Log.d("HRV: ", mHRV.toString())
-                sendHeartRate(mHeartRate, mHRV)
-                sendHeartRateToActivity(mHeartRate)
-            }
-        }
-
-    }
+//    override fun onSensorChanged(event: SensorEvent?){
+//        val sensorType = event?.sensor?.type
+//
+//        when(sensorType) {
+//            Sensor.TYPE_HEART_RATE, Sensor.TYPE_HEART_BEAT -> {
+//                val values = event?.values
+//                val mHeartRate: Int = event!!.values[0].roundToInt()
+////                val mHRV: Int = event!!.values[1]
+//                val mHRV: Int = 3
+//                Log.d("HR: ", mHeartRate.toString())
+////                Log.d("HRV: ", mHRV.toString())
+//                sendHeartRate(mHeartRate, mHRV)
+//                sendHeartRateToActivity(mHeartRate)
+//            }
+//        }
+//    }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         // ignored
     }
 
-    private fun sendHeartRate(heartrate: Int, hrv: Int) {
+    private fun sendHeartRate(heartrate: Int, hrv: Long) {
 
         val httpUrl = "http://" +
                 preferences.getString(
@@ -229,5 +231,11 @@ class HeartRateService : Service(), SensorEventListener {
         val intent = Intent(MainActivity.Config.CONF_BROADCAST_STATUS)
         intent.putExtra("status", status)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+    }
+    private fun calculateRRInterval(currentTimestamp: Long): Long {
+        val rrInterval: Long = currentTimestamp - previousTimestamp
+        previousTimestamp = currentTimestamp
+
+        return rrInterval
     }
 }
